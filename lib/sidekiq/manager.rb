@@ -19,7 +19,7 @@ module Sidekiq
     trap_exit :processor_died
 
     def initialize(options={})
-      logger.info "Booting sidekiq #{Sidekiq::VERSION} with Redis at #{redis {|x| x.client.id}}"
+      logger.info "Booting sidekiq #{Sidekiq::VERSION} with data store #{data_store.name}"
       logger.info "Running in #{RUBY_DESCRIPTION}"
       logger.debug { options.inspect }
       @count = options[:concurrency] || 25
@@ -45,13 +45,8 @@ module Sidekiq
         @ready.each { |x| x.terminate if x.alive? }
         @ready.clear
 
-        logger.debug { "Clearing workers in redis" }
-        Sidekiq.redis do |conn|
-          workers = conn.smembers('workers')
-          workers.each do |name|
-            conn.srem('workers', name) if name =~ /:#{process_id}-/
-          end
-        end
+        logger.debug { "Clearing workers from the data store" }
+        Sidekiq.data_store.clear_workers(process_id)
 
         return after(0) { signal(:shutdown) } if @busy.empty?
         logger.info { "Pausing up to #{timeout} seconds to allow workers to finish..." }
@@ -102,10 +97,8 @@ module Sidekiq
           # Race condition between Manager#stop if Fetcher
           # is blocked on redis and gets a message after
           # all the ready Processors have been stopped.
-          # Push the message back to redis.
-          Sidekiq.redis do |conn|
-            conn.lpush("queue:#{queue}", msg)
-          end
+          # Push the message back to the data store.
+          Sidekiq.data_store.enqueue(queue, msg)
         else
           processor = @ready.pop
           @in_progress[processor.object_id] = [msg, queue]
@@ -124,16 +117,14 @@ module Sidekiq
           # They must die but their messages shall live on.
           logger.info("Still waiting for #{@busy.size} busy workers")
 
-          Sidekiq.redis do |conn|
-            @busy.each do |processor|
-              # processor is an actor proxy and we can't call any methods
-              # that would go to the actor (since it's busy).  Instead
-              # we'll use the object_id to track the worker's data here.
-              msg, queue = @in_progress[processor.object_id]
-              conn.lpush("queue:#{queue}", msg)
-            end
+          @busy.each do |processor|
+            # processor is an actor proxy and we can't call any methods
+            # that would go to the actor (since it's busy).  Instead
+            # we'll use the object_id to track the worker's data here.
+            msg, queue = @in_progress[processor.object_id]
+            Sidekiq.data_store.enqueue(queue, msg)
           end
-          logger.info("Pushed #{@busy.size} messages back to Redis")
+          logger.info("Pushed #{@busy.size} messages back to the data store")
 
           after(0) { signal(:shutdown) }
         end

@@ -16,7 +16,7 @@ module Sidekiq
             :worker => args[1]['class'],
             :queue => args[2]
           }
-          Sidekiq.redis {|conn| conn.rpush(:failed, Sidekiq.dump_json(data)) }
+          Sidekiq.data_store.fail_job(data)
           raise
         end
       end

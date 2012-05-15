@@ -54,6 +54,19 @@ module Sidekiq
     defined?(Sidekiq::CLI)
   end
 
+  def self.backend(&block)
+    @backend = nil
+    @backend.run(&block)
+  end
+
+  def self.backend=(hash)
+    if hash.is_a?(Hash)
+      BackendConnection.create(hash)
+    else
+      raise ArgumentError, "Argument must be a Hash"
+    end
+  end
+
   def self.redis(&block)
     @redis ||= Sidekiq::RedisConnection.create
     raise ArgumentError, "requires a block" if !block
@@ -68,6 +81,10 @@ module Sidekiq
     else
       raise ArgumentError, "redis= requires a Hash or ConnectionPool"
     end
+  end
+
+  def self.data_store
+    @data_store ||= Sidekiq::DataStore.create
   end
 
   def self.client_middleware

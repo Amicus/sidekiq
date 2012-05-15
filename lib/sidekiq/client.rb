@@ -12,15 +12,15 @@ module Sidekiq
     end
 
     def self.registered_workers
-      Sidekiq.redis { |x| x.smembers('workers') }
+      Sidekiq.data_store.registered_workers
     end
 
     def self.registered_queues
-      Sidekiq.redis { |x| x.smembers('queues') }
+      Sidekiq.data_store.registered_queues
     end
 
     ##
-    # The main method used to push a job to Redis.  Accepts a number of options:
+    # The main method used to push a job to the backing data store.  Accepts a number of options:
     #
     #   queue - the named queue to use, default 'default'
     #   class - the worker class to call, required
@@ -49,12 +49,7 @@ module Sidekiq
       pushed = false
       Sidekiq.client_middleware.invoke(worker_class, item, queue) do
         payload = Sidekiq.dump_json(item)
-        Sidekiq.redis do |conn|
-          _, pushed = conn.multi do
-            conn.sadd('queues', queue)
-            conn.rpush("queue:#{queue}", payload)
-          end
-        end
+        pushed = Sidekiq.data_store.push_job(queue, payload)
       end
       !! pushed
     end

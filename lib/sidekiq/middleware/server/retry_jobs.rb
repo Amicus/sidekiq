@@ -53,9 +53,7 @@ module Sidekiq
             logger.debug { "Failure! Retry #{count} in #{delay} seconds" }
             retry_at = Time.now.to_f + delay
             payload = Sidekiq.dump_json(msg)
-            Sidekiq.redis do |conn|
-              conn.zadd('retry', retry_at.to_s, payload)
-            end
+            Sidekiq.data_store.retry(payload, retry_at.to_s)
           else
             # Goodbye dear message, you (re)tried your best I'm sure.
             logger.debug { "Dropping message after hitting the retry maximum: #{msg}" }
