@@ -39,61 +39,39 @@ module Sidekiq
     helpers do
 
       def reset_worker_list
-        Sidekiq.redis do |conn|
-          workers = conn.smembers('workers')
-          workers.each do |name|
-            conn.srem('workers', name)
-          end
-        end
+        Sidekiq.data_store.clear_all_workers
       end
 
       def workers
-        @workers ||= begin
-          Sidekiq.redis do |conn|
-            conn.smembers('workers').map do |w|
-              msg = conn.get("worker:#{w}")
-              msg ? [w, Sidekiq.load_json(msg)] : nil
-            end.compact.sort { |x| x[1] ? -1 : 1 }
-          end
-        end
+        @workers ||= Sidekiq.data_store.worker_jobs
       end
 
       def processed
-        Sidekiq.redis { |conn| conn.get('stat:processed') } || 0
+        Sidekiq.data_store.processed_stats
       end
 
       def failed
-        Sidekiq.redis { |conn| conn.get('stat:failed') } || 0
+        Sidekiq.data_store.failed_stats
       end
 
       def retry_count
-        Sidekiq.redis { |conn| conn.zcard('retry') }
+        Sidekiq.data_store.pending_retry_count
       end
 
       def retries
-        Sidekiq.redis do |conn|
-          results = conn.zrange('retry', 0, 25, :withscores => true)
-          results.each_slice(2).map { |msg, score| [Sidekiq.load_json(msg), Float(score)] }
-        end
+        Sidekiq.data_store.pending_retries
       end
 
       def queues
-        Sidekiq.redis do |conn|
-          conn.smembers('queues').map do |q|
-            [q, conn.llen("queue:#{q}") || 0]
-          end.sort { |x,y| x[1] <=> y[1] }
-        end
+        Sidekiq.data_store.sorted_queues
       end
 
       def retries_with_score(score)
-        Sidekiq.redis do |conn|
-          results = conn.zrangebyscore('retry', score, score)
-          results.map { |msg| Sidekiq.load_json(msg) }
-        end
+        Sidekiq.data_store.retries_with_score(score)
       end
 
       def location
-        Sidekiq.redis { |conn| conn.client.location }
+        Sidekiq.data_store.location
       end
 
       def root_path
@@ -122,15 +100,12 @@ module Sidekiq
     get "/queues/:name" do
       halt 404 unless params[:name]
       @name = params[:name]
-      @messages = Sidekiq.redis {|conn| conn.lrange("queue:#{@name}", 0, 10) }.map { |str| Sidekiq.load_json(str) }
+      @messages = Sidekiq.data_store.get_first(10, @name)
       slim :queue
     end
 
     post "/queues/:name" do
-      Sidekiq.redis do |conn|
-        conn.del("queue:#{params[:name]}")
-        conn.srem("queues", params[:name])
-      end
+      Sidekiq.data_store.delete_queue(params[:name])
       redirect root_path
     end
 
@@ -144,18 +119,9 @@ module Sidekiq
       halt 404 unless params[:score]
       score = params[:score].to_f
       if params['retry']
-        Sidekiq.redis do |conn|
-          results = conn.zrangebyscore('retry', score, score)
-          conn.zremrangebyscore('retry', score, score)
-          results.map do |message|
-            msg = Sidekiq.load_json(message)
-            conn.rpush("queue:#{msg['queue']}", message)
-          end
-        end
+        Sidekiq.data_store.enqueue_scheduled_retries(score)
       elsif params['delete']
-        Sidekiq.redis do |conn|
-          conn.zremrangebyscore('retry', score, score)
-        end
+        Sidekiq.data_store.delete_scheduled_retries(score)
       end
       redirect root_path
     end

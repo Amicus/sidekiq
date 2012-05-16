@@ -9,7 +9,7 @@ module Sidekiq
         ensure
           json = Sidekiq.dump_json(args[1])
           hash = Digest::MD5.hexdigest(json)
-          Sidekiq.redis {|conn| conn.del(hash) }
+          Sidekiq.data_store.forget_job(hash)
         end
       end
     end

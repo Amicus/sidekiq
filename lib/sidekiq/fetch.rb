@@ -31,7 +31,7 @@ module Sidekiq
         begin
           queue = nil
           msg = nil
-          Sidekiq.redis { |conn| queue, msg = conn.blpop(*queues_cmd) }
+          queue, msg = Sidekiq.data_store.pop_message(*queues_cmd)
 
           if msg
             @mgr.assign!(msg, queue.gsub(/.*queue:/, ''))

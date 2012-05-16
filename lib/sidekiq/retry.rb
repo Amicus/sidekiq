@@ -34,22 +34,7 @@ module Sidekiq
       def poll
         watchdog('retry poller thread died!') do
 
-          Sidekiq.redis do |conn|
-            # A message's "score" in Redis is the time at which it should be retried.
-            # Just check Redis for the set of messages with a timestamp before now.
-            messages = nil
-            now = Time.now.to_f.to_s
-            (messages, _) = conn.multi do
-              conn.zrangebyscore('retry', '-inf', now)
-              conn.zremrangebyscore('retry', '-inf', now)
-            end
-
-            messages.each do |message|
-              logger.debug { "Retrying #{message}" }
-              msg = Sidekiq.load_json(message)
-              conn.rpush("queue:#{msg['queue']}", message)
-            end
-          end
+          Sidekiq.data_store.poll
 
           after(POLL_INTERVAL) { poll }
         end

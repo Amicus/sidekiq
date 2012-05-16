@@ -52,38 +52,17 @@ module Sidekiq
     private
 
     def stats(worker, msg, queue)
-      redis do |conn|
-        conn.multi do
-          conn.sadd('workers', self)
-          conn.setex("worker:#{self}:started", DEFAULT_EXPIRY, Time.now.to_s)
-          hash = {:queue => queue, :payload => msg, :run_at => Time.now.strftime("%Y/%m/%d %H:%M:%S %Z")}
-          conn.setex("worker:#{self}", DEFAULT_EXPIRY, Sidekiq.dump_json(hash))
-        end
-      end
-
+      data_store.process_job(self, msg, queue)
       dying = false
       begin
         yield
       rescue
         dying = true
         # Uh oh, error.  We will die so unregister as much as we can first.
-        redis do |conn|
-          conn.multi do
-            conn.incrby("stat:failed", 1)
-            conn.del("stat:processed:#{self}")
-          end
-        end
+        data_store.fail_worker(self)
         raise
       ensure
-        redis do |conn|
-          conn.multi do
-            conn.srem("workers", self)
-            conn.del("worker:#{self}")
-            conn.del("worker:#{self}:started")
-            conn.incrby("stat:processed", 1)
-            conn.incrby("stat:processed:#{self}", 1) unless dying
-          end
-        end
+        data_store.clear_worker(self, dying)
       end
 
     end

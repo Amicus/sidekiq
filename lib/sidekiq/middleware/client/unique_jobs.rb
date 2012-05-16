@@ -11,19 +11,7 @@ module Sidekiq
           enabled = worker_class.get_sidekiq_options['unique']
           if enabled
             payload_hash = Digest::MD5.hexdigest(Sidekiq.dump_json(item))
-            unique = false
-
-            Sidekiq.redis do |conn|
-              conn.watch(payload_hash)
-
-              if conn.get(payload_hash)
-                conn.unwatch
-              else
-                unique = conn.multi do
-                  conn.setex(payload_hash, HASH_KEY_EXPIRATION, 1)
-                end
-              end
-            end
+            unique = Sidekiq.data_store.job_taken?(payload_hash, HASH_KEY_EXPIRATION)
             yield if unique
           else
             yield
