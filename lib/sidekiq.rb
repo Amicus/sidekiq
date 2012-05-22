@@ -54,21 +54,21 @@ module Sidekiq
     defined?(Sidekiq::CLI)
   end
 
-  def self.redis(&block)
-    @redis ||= Sidekiq::RedisConnection.create
-    raise ArgumentError, "requires a block" if !block
-    @redis.with(&block)
-  end
+  #def self.redis(&block)
+  #  @redis ||= Sidekiq::RedisConnection.create
+  #  raise ArgumentError, "requires a block" if !block
+  #  @redis.with(&block)
+  #end
 
-  def self.redis=(hash)
-    if hash.is_a?(Hash)
-      @redis = RedisConnection.create(hash)
-    elsif hash.is_a?(ConnectionPool)
-      @redis = hash
-    else
-      raise ArgumentError, "redis= requires a Hash or ConnectionPool"
-    end
-  end
+  #def self.redis=(hash)
+  #  if hash.is_a?(Hash)
+  #    @redis = RedisConnection.create(hash)
+  #  elsif hash.is_a?(ConnectionPool)
+  #    @redis = hash
+  #  else
+  #    raise ArgumentError, "redis= requires a Hash or ConnectionPool"
+  #  end
+  #end
 
   def self.data_store
     @data_store ||= Sidekiq::DataStore.create

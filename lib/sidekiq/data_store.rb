@@ -146,8 +146,8 @@ module Sidekiq
 #      raise NotImplementedError method_name + "Not implemented!"
 #    end
 
-    def create
-
+    def create(options={})
+      RedisConnection.new(options)
     end
   end
 end
