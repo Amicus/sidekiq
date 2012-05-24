@@ -3,8 +3,8 @@ require 'redis'
 require 'redis/namespace'
 
 module Sidekiq
-  class RedisConnection
-    include Sidekiq::DataStore
+  class RedisConnection  < DataStore
+#    include Sidekiq::DataStore
 
     def self.create(options={})
       RedisConnection.new(options)

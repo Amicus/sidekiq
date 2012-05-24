@@ -72,12 +72,12 @@ module Sidekiq
   #end
 
   def self.data_store
-    @data_store ||= DataStore.create
+    @data_store ||= Sidekiq::DataStore.create
   end
 
   def self.data_store=(hash)
     if hash.is_a?(Hash)
-      @data_store= DataStore.create(hash)
+      @data_store = Sidekiq::DataStore.create(hash)
     end
   end
 

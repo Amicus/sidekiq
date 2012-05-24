@@ -1,6 +1,9 @@
 
 module Sidekiq
-  module DataStore
+  class DataStore
+    def create(options={})
+      RedisConnection.new(options)
+    end
 
     # Return the type of the data store backend.
     def name
@@ -145,9 +148,5 @@ module Sidekiq
 #    def not_implemented(method_name)
 #      raise NotImplementedError method_name + "Not implemented!"
 #    end
-
-    def create(options={})
-      RedisConnection.new(options)
-    end
   end
 end
