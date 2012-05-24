@@ -10,16 +10,6 @@ module Sidekiq
       RedisConnection.new(options)
     end
 
-    def self.build_client(url, namespace)
-      client = Redis.connect(:url => url)
-      if namespace
-        Redis::Namespace.new(namespace, :redis => client)
-      else
-        client
-      end
-    end
-    private_class_method :build_client
-
     def initialize (options={})
       url = options[:url] || ENV['REDISTOGO_URL'] || 'redis://localhost:6379/0'
       # need a connection for Fetcher and Retry
@@ -29,6 +19,16 @@ module Sidekiq
         RedisConnection.build_client(url, options[:namespace])
       end
     end
+
+    def self.build_client(url, namespace)
+      client = Redis.connect(:url => url)
+      if namespace
+        Redis::Namespace.new(namespace, :redis => client)
+      else
+        client
+      end
+    end
+    private_class_method :build_client
 
     def push_job(queue, payload)
       pool.with do |conn|
