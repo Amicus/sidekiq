@@ -1,6 +1,7 @@
 require 'sidekiq/version'
 require 'sidekiq/client'
 require 'sidekiq/worker'
+require 'sidekiq/data_store'
 require 'sidekiq/redis_connection'
 require 'sidekiq/util'
 
