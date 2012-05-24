@@ -1,7 +1,7 @@
 
 module Sidekiq
   class DataStore
-    def create(options={})
+    def self.create(options={})
       RedisConnection.new(options)
     end
 
