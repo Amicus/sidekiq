@@ -26,7 +26,7 @@ module Sidekiq
       size = options[:size] || (Sidekiq.server? ? (Sidekiq.options[:concurrency] + 2) : 5)
 
       @pool = ConnectionPool.new(:timeout => 1, :size => size) do
-        build_client(url, options[:namespace])
+        RedisConnection.build_client(url, options[:namespace])
       end
     end
 
