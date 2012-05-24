@@ -2,7 +2,7 @@
 module Sidekiq
   class DataStore
     def self.create(options={})
-      RedisConnection.new(options)
+      RedisConnection.create(options)
     end
 
     # Return the type of the data store backend.
