@@ -35,7 +35,7 @@ module Sidekiq
         client
       end
     end
-    private_class_method :build_client
+#    private_class_method :build_client
 
     def push_job(queue, payload)
       pool.with do |conn|

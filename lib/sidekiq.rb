@@ -77,8 +77,7 @@ module Sidekiq
 
   def self.data_store=(hash)
     if hash.is_a?(Hash)
-#      @data_store = Sidekiq::DataStore.create(hash)
-      @data_store = RedisConnection.create(hash)
+      @data_store = Sidekiq::DataStore.create(hash)
     end
   end
 
