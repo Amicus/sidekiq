@@ -7,7 +7,10 @@ module Sidekiq
     include Sidekiq::DataStore
 
     def self.create(options={})
-      #RedisConnection.new(options)
+      RedisConnection.new(options)
+    end
+
+    def initialize (options={})
       url = options[:url] || ENV['REDISTOGO_URL'] || 'redis://localhost:6379/0'
       # need a connection for Fetcher and Retry
       size = options[:size] || (Sidekiq.server? ? (Sidekiq.options[:concurrency] + 2) : 5)
@@ -16,16 +19,6 @@ module Sidekiq
         RedisConnection.build_client(url, options[:namespace])
       end
     end
-
-    #def initialize (options={})
-    #  url = options[:url] || ENV['REDISTOGO_URL'] || 'redis://localhost:6379/0'
-    #  # need a connection for Fetcher and Retry
-    #  size = options[:size] || (Sidekiq.server? ? (Sidekiq.options[:concurrency] + 2) : 5)
-    #
-    #  @pool = ConnectionPool.new(:timeout => 1, :size => size) do
-    #    RedisConnection.build_client(url, options[:namespace])
-    #  end
-    #end
 
     def self.build_client(url, namespace)
       client = Redis.connect(:url => url)
