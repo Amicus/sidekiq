@@ -30,6 +30,10 @@ module Sidekiq
     end
 #    private_class_method :build_client
 
+    def name
+      "Redis"
+    end
+
     def push_job(queue, payload)
       pool.with do |conn|
         _, pushed = conn.multi do

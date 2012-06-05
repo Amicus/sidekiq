@@ -26,6 +26,10 @@ module Sidekiq
       end
     end
 
+    def name
+      "MongoDB"
+    end
+
     def enqueue(queue, payload)
       @database['queues'].find_and_modify({:query => {:queue => queue},
                                            :update => {"$push" => {:messages => payload}},
