@@ -19,7 +19,7 @@ module Sidekiq
     trap_exit :processor_died
 
     def initialize(options={})
-      logger.info "Booting sidekiq #{Sidekiq::VERSION} with data store #{data_store.name}"
+      logger.info "Booting sidekiq #{Sidekiq::VERSION} with data store #{Sidekiq::data_store.name}"
       logger.info "Running in #{RUBY_DESCRIPTION}"
       logger.debug { options.inspect }
       @count = options[:concurrency] || 25

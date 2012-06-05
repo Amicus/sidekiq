@@ -146,8 +146,8 @@ module Sidekiq
 
     def enqueue_scheduled_retries(time)
       pool.with do |conn|
-        results = conn.zrangebyscore('retry', score, score)
-        conn.zremrangebyscore('retry', score, score)
+        results = conn.zrangebyscore('retry', time, time)
+        conn.zremrangebyscore('retry', time, time)
         results.map do |message|
           msg = Sidekiq.load_json(message)
           conn.rpush("queue:#{msg['queue']}", message)
