@@ -1,10 +1,15 @@
 require 'connection_pool'
 require 'redis'
 require 'redis/namespace'
+require 'sidekiq/util'
 
 module Sidekiq
   class RedisConnection
     include Sidekiq::DataStore
+
+    DEFAULT_EXPIRY = Sidekiq::Util::DEFAULT_EXPIRY
+
+    attr_reader :pool
 
     def self.create(options={})
       RedisConnection.new(options)
@@ -35,7 +40,7 @@ module Sidekiq
     end
 
     def push_job(queue, payload)
-      pool.with do |conn|
+      @pool.with do |conn|
         _, pushed = conn.multi do
           conn.sadd('queues', queue)
           conn.rpush("queue:#{queue}", payload)
@@ -45,13 +50,13 @@ module Sidekiq
     end
 
     def enqueue(queue, message)
-      pool.with do |conn|
+      @pool.with do |conn|
         conn.lpush("queue:#{queue}", message)
       end
     end
 
     def clear_workers(process_id)
-      pool.with do |conn|
+      @pool.with do |conn|
         workers = conn.smembers('workers')
         workers.each do |name|
           conn.srem('workers', name) if name =~ /:#{process_id}-/
@@ -60,7 +65,7 @@ module Sidekiq
     end
 
     def clear_all_workers
-      pool.with do |conn|
+      @pool.with do |conn|
         workers = conn.smembers('workers')
         workers.each do |name|
           conn.srem('workers', name)
@@ -69,31 +74,31 @@ module Sidekiq
     end
 
     def fail_job(job_data)
-      pool.with do |conn|
+      @pool.with do |conn|
         conn.rpush(:failed, Sidekiq.dump_json(job_data))
       end
     end
 
     def retry(job_data, time)
-      pool.with do |conn|
+      @pool.with do |conn|
         conn.zadd('retry', time, job_data)
       end
     end
 
     def retries_with_score(score)
-      pool.with do |conn|
+      @pool.with do |conn|
         results = conn.zrangebyscore('retry', score, score)
         results.map { |msg| Sidekiq.load_json(msg) }
       end
     end
 
     def registered_queues
-      pool.with { |conn| conn.smembers('queues') }
+      @pool.with { |conn| conn.smembers('queues') }
     end
 
     def sorted_queues
       queues = registered_queues
-      pool.with do |conn|
+      @pool.with do |conn|
         queues.map { |q|
           [q, conn.llen("queue:#{q}") || 0]
         }.sort { |x,y| x[1] <=> y[1] }
@@ -101,12 +106,12 @@ module Sidekiq
     end
 
     def registered_workers
-      pool.with { |conn| conn.smembers('workers') }
+      @pool.with { |conn| conn.smembers('workers') }
     end
 
     def worker_jobs
       workers = registered_workers
-      pool.with { |conn|
+      @pool.with { |conn|
         workers.map { |w|
           msg = conn.get("worker:#{w}")
           msg ? [w, Sidekiq.load_json(msg)] : nil
@@ -115,41 +120,41 @@ module Sidekiq
     end
 
     def processed_stats
-      pool.with { |conn| conn.get('stat:processed') } || 0
+      @pool.with { |conn| conn.get('stat:processed') } || 0
     end
 
     def failed_stats
-      pool.with { |conn| conn.get('stat:failed') } || 0
+      @pool.with { |conn| conn.get('stat:failed') } || 0
     end
 
     def pending_retry_count
-      pool.with { |conn| conn.zcard('retry') }
+      @pool.with { |conn| conn.zcard('retry') }
     end
 
     def pending_retries
-      pool.with do |conn|
+      @pool.with do |conn|
         results = conn.zrange('retry', 0, 25, :withscores => true)
         results.each_slice(2).map { |msg, score| [Sidekiq.load_json(msg), Float(score)] }
       end
     end
 
     def location
-      pool.with { |conn| conn.client.location }
+      @pool.with { |conn| conn.client.location }
     end
 
     def get_first(n, name)
-      pool.with {|conn| conn.lrange("queue:#{name}", 0, n) }.map { |str| Sidekiq.load_json(str) }
+      @pool.with {|conn| conn.lrange("queue:#{name}", 0, n) }.map { |str| Sidekiq.load_json(str) }
     end
 
     def delete_queue(name)
-      pool.with do |conn|
+      @pool.with do |conn|
         conn.del("queue:#{name}")
         conn.srem("queues", name)
       end
     end
 
     def enqueue_scheduled_retries(time)
-      pool.with do |conn|
+      @pool.with do |conn|
         results = conn.zrangebyscore('retry', time, time)
         conn.zremrangebyscore('retry', time, time)
         results.map do |message|
@@ -160,36 +165,36 @@ module Sidekiq
     end
 
     def pop_message(*queues)
-      pool.with { |conn| conn.blpop(*queues) }
+      @pool.with { |conn| conn.blpop(*queues) }
     end
 
     def poll
-    pool.with do |conn|
-      # A message's "score" in Redis is the time at which it should be retried.
-      # Just check Redis for the set of messages with a timestamp before now.
-      messages = nil
-      now = Time.now.to_f.to_s
-      (messages, _) = conn.multi do
-        conn.zrangebyscore('retry', '-inf', now)
-        conn.zremrangebyscore('retry', '-inf', now)
-      end
+      @pool.with do |conn|
+        # A message's "score" in Redis is the time at which it should be retried.
+        # Just check Redis for the set of messages with a timestamp before now.
+        messages = nil
+        now = Time.now.to_f.to_s
+        (messages, _) = conn.multi do
+          conn.zrangebyscore('retry', '-inf', now)
+          conn.zremrangebyscore('retry', '-inf', now)
+        end
 
-      messages.each do |message|
-        logger.debug { "Retrying #{message}" }
-        msg = Sidekiq.load_json(message)
-        conn.rpush("queue:#{msg['queue']}", message)
+        messages.each do |message|
+          logger.debug { "Retrying #{message}" }
+          msg = Sidekiq.load_json(message)
+          conn.rpush("queue:#{msg['queue']}", message)
+        end
       end
-    end
     end
 
     def delete_scheduled_retries(time)
-      pool.with do |conn|
+      @pool.with do |conn|
         conn.zremrangebyscore('retry', time, time)
       end
     end
 
     def process_job(worker, message, queue)
-      pool.with do |conn|
+      @pool.with do |conn|
         conn.multi do
           conn.sadd('workers', worker)
           conn.setex("worker:#{worker}:started", DEFAULT_EXPIRY, Time.now.to_s)
@@ -200,7 +205,7 @@ module Sidekiq
     end
 
     def fail_worker(worker)
-      pool.with do |conn|
+      @pool.with do |conn|
         conn.multi do
           conn.incrby("stat:failed", 1)
           conn.del("stat:processed:#{worker}")
@@ -209,7 +214,7 @@ module Sidekiq
     end
 
     def clear_worker(worker, dying)
-      pool.with do |conn|
+      @pool.with do |conn|
         conn.multi do
           conn.srem("workers", worker)
           conn.del("worker:#{worker}")
@@ -222,7 +227,7 @@ module Sidekiq
 
     def job_taken?(hash, expiration)
       unique = false
-      pool.with do |conn|
+      @pool.with do |conn|
         conn.watch(hash)
 
         if conn.get(hash)
@@ -237,7 +242,7 @@ module Sidekiq
     end
 
     def forget_job(hash)
-      pool.with {|conn| conn.del(hash) }
+      @pool.with {|conn| conn.del(hash) }
     end
 
     attr_reader :pool

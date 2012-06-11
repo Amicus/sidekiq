@@ -2,6 +2,7 @@ require 'sidekiq/version'
 require 'sidekiq/client'
 require 'sidekiq/worker'
 require 'sidekiq/data_store'
+require 'sidekiq/mongo_connection'
 require 'sidekiq/redis_connection'
 require 'sidekiq/util'
 
@@ -55,21 +56,23 @@ module Sidekiq
     defined?(Sidekiq::CLI)
   end
 
-  #def self.redis(&block)
-  #  @redis ||= Sidekiq::RedisConnection.create
-  #  raise ArgumentError, "requires a block" if !block
-  #  @redis.with(&block)
-  #end
+  def self.redis(&block)
+    @redis ||= Sidekiq.data_store.pool
+    raise ArgumentError, "requires a block" if !block
+    @redis.with(&block)
+  end
 
-  #def self.redis=(hash)
-  #  if hash.is_a?(Hash)
-  #    @redis = RedisConnection.create(hash)
-  #  elsif hash.is_a?(ConnectionPool)
-  #    @redis = hash
-  #  else
-  #    raise ArgumentError, "redis= requires a Hash or ConnectionPool"
-  #  end
-  #end
+  def self.redis=(hash)
+    if hash.is_a?(Hash)
+      self.data_store = {:redis => hash}
+      #@redis = RedisConnection.create(hash)
+    elsif hash.is_a?(ConnectionPool)
+      raise NotImplementedError, "No longer support passing in a connection pool"
+      @redis = hash
+    else
+      raise ArgumentError, "redis= requires a Hash or ConnectionPool"
+    end
+  end
 
   def self.data_store
     @data_store ||= Sidekiq::DataStore.create
@@ -77,7 +80,10 @@ module Sidekiq
 
   def self.data_store=(hash)
     if hash.is_a?(Hash)
+      @redis = nil
       @data_store = Sidekiq::DataStore.create(hash)
+    else
+      raise ArgumentError, "data_store= needs to be a hash"
     end
   end
 

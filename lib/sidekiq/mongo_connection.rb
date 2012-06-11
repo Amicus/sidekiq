@@ -1,28 +1,31 @@
 require 'rubygems'
 require 'mongo'
+require 'set'
 
 module Sidekiq
-  class MongoConection
+  class MongoConnection
     include Sidekiq::DataStore
 
     def self.create(options={})
       MongoConnection.new(options)
     end
 
-    def self.initialize(options={})
-      url = options[:url] || ENV['MONGO_URL'] || 'mongodb://localhost'
+    #TODO: make this look like mongoid and support replica sets
+    def initialize(options={})
+      options = options.dup
+      host = options.delete(:host)
+      port = options.delete(:port)
       replica_set = options[:replica_set]
-      port = options[:port]
       # need a connection for Fetcher and Retry
       size = options[:size] || (Sidekiq.server? ? (Sidekiq.options[:concurrency] + 2) : 5)
-      namespace = options[:namespace]
+      namespace = options.delete(:namespace)
       if replica_set
         options[:read] = :secondary
         @database = Mongo::ReplSetConnection.new(replica_set, port, options).db(namespace)
-      elsif url
-        @database = Mongo::Connection.new(url, port, options).db(namespace)
+      elsif host
+        @database = Mongo::Connection.new(host, port, options).db(namespace)
       else
-        raise ArgumentError("Missing required arguments.")
+        raise ArgumentError, "Missing required arguments for initializing MongoDB data store."
       end
     end
 
@@ -31,9 +34,16 @@ module Sidekiq
     end
 
     def enqueue(queue, payload)
-      @database['queues'].find_and_modify({:query => {:queue => queue},
-                                           :update => {"$push" => {:messages => payload}},
-                                           :upsert => true})
+      @database['queues'].insert({'name' => queue,
+                                  'message' => payload,
+                                  'inserted' => Time.now.strftime("%Y/%m/%d %H:%M:%S %Z"),
+                                  'owned' => 'false'
+                                 })
+    end
+
+    #TODO: clean up the api to get rid of this method
+    def push_job(queue, payload)
+      enqueue(queue, payload)
     end
 
     def clear_workers(process_id)
@@ -45,8 +55,8 @@ module Sidekiq
     end
 
     def fail_job(job_data)
-      @database['failed'].find_and_modify({:query => {:type => "jobs"},
-                                           :update => {"$push" => {:list => Sidekiq.dump_json(job_data),
+      @database['failed'].find_and_modify({:query => {'type' => "jobs"},
+                                           :update => {"$push" => {'list'=> Sidekiq.dump_json(job_data),
                                            :upsert => true}}})
     end
 
@@ -56,7 +66,7 @@ module Sidekiq
 
     def retries_with_score(score)
       results = @database['retries'].find({:time => score},
-                                          {:fields => {:_id => 0, :time => 0, :job => 1}})
+                                          {:fields => {'_id' => 0, 'time' => 0, 'job' => 1}})
       jobs = []
       while results.has_next? do
         next_result = results.next
@@ -66,52 +76,71 @@ module Sidekiq
     end
 
     def registered_queues
-      queue_docs = @database['queues'].find({}, {:fields => {:_id => 0, :queue => 1, :messages => 0}})
-      queues = []
+      queue_docs = @database['queues'].find({}, {:fields => {'_id' => 0,
+                                                             'name' => 1,
+                                                             'message' => 0,
+                                                             'inserted' => 0,
+                                                             'owned' => 0}
+                                                }
+                                           )
+      queues = Set.new
       while queue_docs.has_next? do
         doc = queue_docs.next
-        queues << doc[:queue]
+        queues.add(doc['name'])
       end
-      return queues
+      return queues.to_a
     end
 
     def sorted_queues
-      queue_docs = @database['queues'].find({}, {:fields => {:_id => 0, :queue => 1, :messages => 1}})
-      queues = []
+      queue_docs = @database['queues'].find({})
+      queues = {}
       while queue_docs.has_next? do
         doc = queue_docs.next
-        queues << [doc[:queue], doc[:messages].length]
+        count = 0
+        if queues.has_key?(doc['name'])
+          if doc['owned'].eql?('false')
+            count = queues[doc['name']] + 1
+          end
+        end
+        queues[doc['name']] = count
       end
-      queues.sort { |x,y| x[1] <=> y[1] }
+
+      queue_array = []
+      queues.each_pair do |k,v|
+        queue_array << [k, v]
+      end
+
+      queue_array.sort { |x,y| x[1] <=> y[1] }
     end
 
     def registered_workers
-      worker_docs = @database['workers'].find({}, {:fields => {:_id => 0, :name => 1, :job => 0}})
+      worker_docs = @database['workers'].find({}, {:fields => {'_id' => 0, 'name' => 1, 'job' => 0}})
       workers = []
       while worker_docs.has_next? do
         worker = worker_docs.next
-        workers << worker[:name]
+        workers << worker['name']
       end
       return workers
     end
 
     def worker_jobs
-      worker_docs = @database['workers'].find({}, {:fields => {:_id => 0, :name => 1, :job => 1}})
+      worker_docs = @database['workers'].find({}, {:fields => {'_id' => 0, 'name' => 1, 'job' => 1}})
       workers = []
       while worker_docs.has_next? do
         doc = worker_docs.next
-        msg = doc[:job]
-        workers << msg ? [doc[:name], Sidekiq.load_json(msg)] : nil
+        msg = doc['job']
+        worker = msg ? [doc['name'], Sidekiq.load_json(msg)] : nil
+        workers << worker
       end
       workers.compact.sort{ |x| x[1] ? -1 : 1 }
     end
 
     def processed_stats
-      @database['stats'].find({:type => 'processed'})
+      @database['stats'].find_one({'type' => 'processed'})
     end
 
     def failed_stats
-      @database['stats'].find({:type => 'failed'})
+      @database['stats'].find_one({'type' => 'failed'})
     end
 
     def pending_retry_count
@@ -119,11 +148,11 @@ module Sidekiq
     end
 
     def pending_retries
-      retry_docs = @database['retries'].find({}, {}).sort(:time, :asc)
+      retry_docs = @database['retries'].find({}, {}).sort('time', :asc)
       retries = []
       while retry_docs.has_next? and retries.size <= 25 do
         doc = retry_docs.next
-        retries << [Sidekiq.load_json(doc[:job]), Float(doc[:time])]
+        retries << [Sidekiq.load_json(doc['job']), Float(doc['time'])]
       end
       return retries
     end
@@ -134,20 +163,32 @@ module Sidekiq
     end
 
     def get_first(n, name)
-      queue = @database['queues'].find({:queue => name})
-      queue[:messages].slice(0, n).map {|str| Sidekiq.load_json(str)}
+      queue_docs = @database['queues'].find({'name' => name},
+                                            {:fields => {'_id' => 1,
+                                                         'name' => 1,
+                                                         'message' => 1,
+                                                         'inserted' => 1,
+                                                         'owned' => 1}
+                                            }
+                                      ).sort('_id', :asc).limit(n)
+      results = []
+      while queue_docs.has_next?
+        next_doc = queue_docs.next
+        results << Sidekiq.load_json(next_doc['message'])
+      end
+      return results
     end
 
     def delete_queue(name)
-      @database['queues'].remove({:queue => name})
+      @database['queues'].remove({'name' => name})
     end
 
     # TODO: Atomicity
     def enqueue_scheduled_retries(time)
-      results = @database['retries'].find({:time => time})
+      results = @database['retries'].find({'time' => time})
       while results.has_next? do
         result = results.next
-        job = result[:job]
+        job = result['job']
         msg = Sidekiq.load_json(job)
         queue = msg['queue']
         enqueue(queue, msg)
@@ -156,16 +197,24 @@ module Sidekiq
     end
 
     def pop_message(*queues)
-      pool.with { |conn| conn.blpop(*queues) }
+      queue_strings = queues.map {|q| q.to_s}
+      queue = @database['queues'].find_and_modify({:query => {'name' => {"$in" => queue_strings},
+                                                              'owned' => 'false'},
+                                                   :update => {"$set" => {'owned' => 'true'}},
+                                                   :fields => {'name' => 1, 'message' => 1},
+                                                   :new => false})
+      if queue
+        [queue['name'], queue['message']]
+      end
     end
 
     #TODO: Atomicity
     def poll
       now = Time.now.to_f.to_s
-      retries = @database['retries'].find({:time => {"$lte" => now}})
+      retries = @database['retries'].find({'time' => {"$lte" => now}})
       while retries.has_next? do
         to_retry = retries.next
-        job = to_retry[:job]
+        job = to_retry['job']
         logger.debug { "Retrying #{job}"}
         msg = Sidekiq.load_json(job)
         queue = msg['queue']
@@ -174,30 +223,37 @@ module Sidekiq
     end
 
     def delete_scheduled_retries(time)
-      @database['retries'].remove({:time => time})
+      @database['retries'].remove({'time' => time})
     end
 
     #TODO: mongo analogue of setex method:
     #TODO: conn.setex("worker:#{worker}:started", DEFAULT_EXPIRY, Time.now.to_s)
     #TODO: conn.setex("worker:#{worker}", DEFAULT_EXPIRY, Sidekiq.dump_json(hash))
     def process_job(worker, message, queue)
-      job_hash = Sidekiq.dump_json({:queue => queue, :payload => message, :run_at => Time.now.strftime("%Y/%m/%d %H:%M:%S %Z")})
-      @database['workers'].find_and_modify({:query => {:name => worker},
-                                            :update => {:job => job_hash},
+      job_hash = Sidekiq.dump_json({'queue' => queue, 'payload' => message, 'run_at' => Time.now.strftime("%Y/%m/%d %H:%M:%S %Z")})
+      @database['workers'].find_and_modify({:query => {'name' => worker.to_s},
+                                            :update => {"$set" => {'job' => job_hash}},
                                             :upsert => true})
     end
 
     def fail_worker(worker)
-      @database['stats'].find_and_modify({:query => {:type => 'failed'},
+      @database['stats'].find_and_modify({:query => {'type' => 'failed'},
                                           :update => {"$inc" => {:count => 1}},
                                           :upsert => true})
-      @database['stats'].remove({:type => 'processed', :worker => worker})
+      @database['stats'].remove({'type' => 'processed', :worker => worker.to_s})
     end
 
     def clear_worker(worker, dying)
-      @database['workers'].remove({:name => worker})
-      @database['stats'].find_and_modify({:query => {:type => 'processed', :worker => worker},
-                                          :update => {"$inc" => {:count => 1}}}) unless dying
+      @database['workers'].remove({'name' => worker.to_s})
+      @database['stats'].find_and_modify({:query => {'type' => 'processed', 'worker' => worker.to_s},
+                                          :update => {"$inc" => {'count' => 1}}}) unless dying
+    end
+
+    def flush
+      collections = @database.collection_names
+      collections.each do |collection|
+        @database.drop_collection(collection) unless collection =~ /^system\./
+      end
     end
 
     def job_taken?(hash, expiration)

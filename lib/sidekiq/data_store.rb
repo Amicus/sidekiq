@@ -1,8 +1,17 @@
 
 module Sidekiq
   module DataStore
+
+    class InvalidDataStore < StandardError; end
+
     def self.create(options={})
-      RedisConnection.create(options)
+      if options[:mongo]
+        MongoConnection.create(options[:mongo])
+      elsif options[:redis]
+        RedisConnection.create(options[:redis])
+      else
+        raise InvalidDataStore, "You must specify a mongo or redis data store"
+      end
     end
 
     # Return the type of the data store backend.
@@ -141,6 +150,11 @@ module Sidekiq
 
     # Unregister the job
     def forget_job(hash)
+      not_implemented
+    end
+
+    # Clear the data store
+    def flush
       not_implemented
     end
 

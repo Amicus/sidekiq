@@ -14,7 +14,8 @@ module Sidekiq
 
     def initialize(mgr, queues)
       @mgr = mgr
-      @queues = queues.map { |q| "queue:#{q}" }
+      #TODO: This breaks redis backend
+      @queues = queues  #.map { |q| "queue:#{q}" }
       @unique_queues = @queues.uniq
     end
 
@@ -32,7 +33,6 @@ module Sidekiq
           queue = nil
           msg = nil
           queue, msg = Sidekiq.data_store.pop_message(*queues_cmd)
-
           if msg
             @mgr.assign!(msg, queue.gsub(/.*queue:/, ''))
           else

@@ -12,4 +12,5 @@ require 'sidekiq/util'
 Sidekiq::Util.logger.level = Logger::ERROR
 
 require 'sidekiq/redis_connection'
-REDIS = Sidekiq::RedisConnection.create(:url => "redis://localhost/15", :namespace => 'testy')
+REDIS = {:url => "redis://localhost/15", :namespace => 'testy'}
+DATA_STORE = { :mongo => {:host => "localhost", :port => 27017, :pool_size => 5, :namespace => "sidekiq_test" }, :redis => {:host => "localhost", :port => 27017, :size => 50, :namespace => "sidekiq_test" }}

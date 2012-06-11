@@ -5,7 +5,7 @@ require 'sidekiq/processor'
 class TestStats < MiniTest::Unit::TestCase
   describe 'with redis' do
     before do
-      @redis = Sidekiq.redis = REDIS
+      Sidekiq.redis = REDIS
       Sidekiq.redis {|c| c.flushdb }
     end
 
@@ -21,7 +21,7 @@ class TestStats < MiniTest::Unit::TestCase
       msg = { 'class' => DumbWorker.to_s, 'args' => [""] }
       boss = MiniTest::Mock.new
 
-      @redis.with do |conn|
+      Sidekiq.redis do |conn|
 
         set = conn.smembers('workers')
         assert_equal 0, set.size
@@ -47,7 +47,7 @@ class TestStats < MiniTest::Unit::TestCase
       msg = { 'class' => DumbWorker.to_s, 'args' => [nil] }
       boss = MiniTest::Mock.new
 
-      @redis.with do |conn|
+      Sidekiq.redis do |conn|
         assert_equal [], conn.smembers('workers')
         assert_equal 0, conn.get('stat:failed').to_i
         assert_equal 0, conn.get('stat:processed').to_i
