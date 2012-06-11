@@ -1,6 +1,7 @@
 require 'rubygems'
 require 'mongo'
 require 'set'
+require 'yaml'
 
 module Sidekiq
   class MongoConnection
@@ -18,7 +19,11 @@ module Sidekiq
       replica_set = options[:replica_set]
       # need a connection for Fetcher and Retry
       size = options[:size] || (Sidekiq.server? ? (Sidekiq.options[:concurrency] + 2) : 5)
-      namespace = options.delete(:namespace)
+
+      namespace_prefix = "sidekiq"
+      namespace_suffix = options.delete(:namespace)
+      namespace = "#{namespace_prefix}_#{namespace_suffix}"
+
       if replica_set
         options[:read] = :secondary
         @database = Mongo::ReplSetConnection.new(replica_set, port, options).db(namespace)
@@ -52,6 +57,18 @@ module Sidekiq
 
     def clear_all_workers
       @database['workers'].remove({})
+    end
+
+    def clear_worker(worker, dying)
+      @database['workers'].remove({'name' => worker.to_s})
+
+      @database['stats'].find_and_modify({:query => {'type' => 'processed', 'worker' => 'all'},
+                                          :update => {"$inc" => {'count' => 1}},
+                                          :upsert => true})
+
+      @database['stats'].find_and_modify({:query => {'type' => 'processed', 'worker' => worker.to_s},
+                                          :update => {"$inc" => {'count' => 1}},
+                                          :upsert => true}) unless dying
     end
 
     def fail_job(job_data)
@@ -136,11 +153,16 @@ module Sidekiq
     end
 
     def processed_stats
-      @database['stats'].find_one({'type' => 'processed'})
+      get_stat('processed', 'all')
     end
 
     def failed_stats
-      @database['stats'].find_one({'type' => 'failed'})
+      get_stat('failed', 'all')
+    end
+
+    def get_stat(type, worker)
+      stat = @database['stats'].find_one({'type' => type, 'worker' => worker})
+      stat ? stat['count'] : 0
     end
 
     def pending_retry_count
@@ -237,16 +259,13 @@ module Sidekiq
     end
 
     def fail_worker(worker)
-      @database['stats'].find_and_modify({:query => {'type' => 'failed'},
+      @database['stats'].find_and_modify({:query => {'type' => 'failed', 'worker' => worker.to_s},
+                                          :update => {"$inc" => {:count => 1}},
+                                          :upsert => true})
+      @database['stats'].find_and_modify({:query => {'type' => 'failed', 'worker' => 'all'},
                                           :update => {"$inc" => {:count => 1}},
                                           :upsert => true})
       @database['stats'].remove({'type' => 'processed', :worker => worker.to_s})
-    end
-
-    def clear_worker(worker, dying)
-      @database['workers'].remove({'name' => worker.to_s})
-      @database['stats'].find_and_modify({:query => {'type' => 'processed', 'worker' => worker.to_s},
-                                          :update => {"$inc" => {'count' => 1}}}) unless dying
     end
 
     def flush
