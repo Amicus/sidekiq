@@ -16,7 +16,7 @@ module Sidekiq
       options = options.dup
       host = options.delete(:host)
       port = options.delete(:port)
-      replica_set = options[:replica_set]
+      replica_set = options.delete(:replica_set)
       # need a connection for Fetcher and Retry
       size = options[:size] || (Sidekiq.server? ? (Sidekiq.options[:concurrency] + 2) : 5)
 
