@@ -11,7 +11,6 @@ module Sidekiq
       MongoConnection.new(options)
     end
 
-    #TODO: make this look like mongoid and support replica sets
     def initialize(options={})
       options = options.dup
       host = options.delete(:host)
@@ -79,17 +78,6 @@ module Sidekiq
 
     def retry(job_data, time)
       @database['retries'].insert({:time => time, :job => job_data})
-    end
-
-    def retries_with_score(score)
-      results = @database['retries'].find({:time => score},
-                                          {:fields => {'_id' => 0, 'time' => 0, 'job' => 1}})
-      jobs = []
-      while results.has_next? do
-        next_result = results.next
-        jobs << Sidekiq.load_json(next_result[:job])
-      end
-      return jobs
     end
 
     def registered_queues
@@ -165,20 +153,6 @@ module Sidekiq
       stat ? stat['count'] : 0
     end
 
-    def pending_retry_count
-      @database['retries'].find({}).count()
-    end
-
-    def pending_retries
-      retry_docs = @database['retries'].find({}, {}).sort('time', :asc)
-      retries = []
-      while retry_docs.has_next? and retries.size <= 25 do
-        doc = retry_docs.next
-        retries << [Sidekiq.load_json(doc['job']), Float(doc['time'])]
-      end
-      return retries
-    end
-
     #TODO: find location method for mongo client
     def location
       "localhost"
@@ -227,7 +201,10 @@ module Sidekiq
                                                    :new => false})
       if queue
         [queue['name'], queue['message']]
+      else
+        sleep 1
       end
+
     end
 
     #TODO: Atomicity
@@ -246,6 +223,31 @@ module Sidekiq
 
     def delete_scheduled_retries(time)
       @database['retries'].remove({'time' => time})
+    end
+
+    def retries_with_score(score)
+      results = @database['retries'].find({:time => score},
+                                          {:fields => {'_id' => 0, 'time' => 0, 'job' => 1}})
+      jobs = []
+      while results.has_next? do
+        next_result = results.next
+        jobs << Sidekiq.load_json(next_result[:job])
+      end
+      return jobs
+    end
+
+    def pending_retry_count
+      @database['retries'].find({}).count()
+    end
+
+    def pending_retries
+      retry_docs = @database['retries'].find({}, {}).sort('time', :asc)
+      retries = []
+      while retry_docs.has_next? and retries.size <= 25 do
+        doc = retry_docs.next
+        retries << [Sidekiq.load_json(doc['job']), Float(doc['time'])]
+      end
+      return retries
     end
 
     #TODO: mongo analogue of setex method:

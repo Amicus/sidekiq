@@ -1,6 +1,8 @@
+require 'sidekiq/util'
 
 module Sidekiq
   module DataStore
+    include Sidekiq::Util
 
     class InvalidDataStore < StandardError; end
 
@@ -158,6 +160,10 @@ module Sidekiq
       not_implemented
     end
 
+    # Poll for retries
+    def poll
+      not_implemented
+    end
 
 #    def not_implemented(method_name)
 #      raise NotImplementedError method_name + "Not implemented!"
