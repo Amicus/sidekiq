@@ -38,10 +38,11 @@ module Sidekiq
     end
 
     def enqueue(queue, payload)
+      logger.debug "enqueue method with #{payload.class}"
       @database['queues'].insert({'name' => queue,
-                                  'message' => payload,
-                                  'inserted' => Time.now.strftime("%Y/%m/%d %H:%M:%S %Z"),
-                                  'owned' => 'false'
+                                  'message' => Sidekiq.dump_json(payload),
+                                  'inserted' => Time.now.utc,
+                                  'owned' => false
                                  })
     end
 
@@ -76,10 +77,6 @@ module Sidekiq
                                            :upsert => true}}})
     end
 
-    def retry(job_data, time)
-      @database['retries'].insert({:time => time, :job => job_data})
-    end
-
     def registered_queues
       queue_docs = @database['queues'].find({}, {:fields => {'_id' => 0,
                                                              'name' => 1,
@@ -103,7 +100,7 @@ module Sidekiq
         doc = queue_docs.next
         count = 0
         if queues.has_key?(doc['name'])
-          if doc['owned'].eql?('false')
+          if doc['owned'].eql?(false)
             count = queues[doc['name']] + 1
           end
         end
@@ -195,29 +192,36 @@ module Sidekiq
     def pop_message(*queues)
       queue_strings = queues.map {|q| q.to_s}
       queue = @database['queues'].find_and_modify({:query => {'name' => {"$in" => queue_strings},
-                                                              'owned' => 'false'},
-                                                   :update => {"$set" => {'owned' => 'true'}},
+                                                              'owned' => false},
+                                                   :update => {"$set" => {'owned' => true}},
                                                    :fields => {'name' => 1, 'message' => 1},
                                                    :new => false})
       if queue
-        [queue['name'], queue['message']]
+        [queue['name'], Sidekiq.load_json(queue['message'])]
       else
         sleep 1
+        nil
       end
+    end
 
+
+    def retry(job_data, time)
+      logger.debug "retrying with #{job_data.class}"
+      @database['retries'].insert({:time => time, :job => Sidekiq.dump_json(job_data)})
     end
 
     #TODO: Atomicity
     def poll
-      now = Time.now.to_f.to_s
+      now = Time.now.utc
       retries = @database['retries'].find({'time' => {"$lte" => now}})
       while retries.has_next? do
         to_retry = retries.next
         job = to_retry['job']
         logger.debug { "Retrying #{job}"}
         msg = Sidekiq.load_json(job)
+        logger.debug "enqueing #{job.class}"
         queue = msg['queue']
-        enqueue(queue, job)
+        enqueue(queue, msg)
       end
       delete_scheduled_retries(now)
     end
@@ -255,7 +259,7 @@ module Sidekiq
     #TODO: conn.setex("worker:#{worker}:started", DEFAULT_EXPIRY, Time.now.to_s)
     #TODO: conn.setex("worker:#{worker}", DEFAULT_EXPIRY, Sidekiq.dump_json(hash))
     def process_job(worker, message, queue)
-      job_hash = Sidekiq.dump_json({'queue' => queue, 'payload' => message, 'run_at' => Time.now.strftime("%Y/%m/%d %H:%M:%S %Z")})
+      job_hash = Sidekiq.dump_json({'queue' => queue, 'payload' => message, 'run_at' => Time.now.utc})
       @database['workers'].find_and_modify({:query => {'name' => worker.to_s},
                                             :update => {"$set" => {'job' => job_hash}},
                                             :upsert => true})
@@ -278,6 +282,7 @@ module Sidekiq
       end
     end
 
+    #TODO: this is redis mofo - why it be here?
     def job_taken?(hash, expiration)
       unique = false
       pool.with do |conn|

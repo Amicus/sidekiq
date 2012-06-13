@@ -1,10 +1,10 @@
 require 'helper'
 require 'sidekiq/processor'
-require 'debugger'
 require 'multi_json'
 require 'sidekiq/manager'
 require 'sidekiq/retry'
 require 'sidekiq/middleware/server/retry_jobs'
+require 'debugger'
 
 class TestMongo < MiniTest::Unit::TestCase
 
@@ -33,6 +33,7 @@ class TestMongo < MiniTest::Unit::TestCase
       @boss.expect(:processor_done!, nil, [processor])
       processor.process(msg, 'default')
       @boss.verify
+      processor.terminate
       assert_equal 1, $invokes
       assert_equal 0, $errors.size
     end
@@ -62,7 +63,7 @@ class TestMongo < MiniTest::Unit::TestCase
     end
 
     it 'saves backtraces' do
-      @data_store.expect :retry, 1, [String, String]
+      @data_store.expect :retry, 1, [Hash, Time]
       msg = { 'class' => 'Bob', 'args' => [1,2,'foo'], 'retry' => true, 'backtrace' => true }
       handler = Sidekiq::Middleware::Server::RetryJobs.new
       c = nil
@@ -76,7 +77,7 @@ class TestMongo < MiniTest::Unit::TestCase
     end
 
     it 'saves partial backtraces' do
-      @data_store.expect :retry, 1, [String, String]
+      @data_store.expect :retry, 1, [Hash, Time]
       msg = { 'class' => 'Bob', 'args' => [1,2,'foo'], 'retry' => true, 'backtrace' => 3 }
       handler = Sidekiq::Middleware::Server::RetryJobs.new
       c = nil
@@ -90,7 +91,7 @@ class TestMongo < MiniTest::Unit::TestCase
     end
 
     it 'handles a new failed message' do
-      @data_store.expect :retry, 1, [String, String]
+      @data_store.expect :retry, 1, [Hash, Time]
       msg = { 'class' => 'Bob', 'args' => [1,2,'foo'], 'retry' => true }
       handler = Sidekiq::Middleware::Server::RetryJobs.new
       assert_raises RuntimeError do
@@ -108,7 +109,7 @@ class TestMongo < MiniTest::Unit::TestCase
     end
 
     it 'handles a recurring failed message' do
-      @data_store.expect :retry, 1, [String, String]
+      @data_store.expect :retry, 1, [Hash, Time]
       now = Time.now.utc
       msg = {"class"=>"Bob", "args"=>[1, 2, "foo"], 'retry' => true, "queue"=>"default", "error_message"=>"kerblammo!", "error_class"=>"RuntimeError", "failed_at"=>now, "retry_count"=>10}
       handler = Sidekiq::Middleware::Server::RetryJobs.new
@@ -140,21 +141,17 @@ class TestMongo < MiniTest::Unit::TestCase
 
   describe 'poller' do
     before do
-      @data_store = MiniTest::Mock.new
-      Sidekiq.instance_variable_set(:@data_store, @data_store)
-
-      #def @redis.with; yield self; end
+      Sidekiq.data_store = DATA_STORE
+      Sidekiq.data_store.flush
     end
 
     it 'should poll like a bad mother...SHUT YO MOUTH' do
-      fake_msg = Sidekiq.dump_json({ 'class' => 'Bob', 'args' => [1,2], 'queue' => 'someq' })
-      @data_store.expect :poll, [[fake_msg], 1], []
-      @data_store.expect :push_job, 1, ['queue:someq', fake_msg]
+      fake_msg = { 'class' => 'Bob', 'args' => [1,2], 'queue' => 'someq' }
+      Sidekiq.data_store.retry(fake_msg, Time.at(Time.now.to_i - 200))
 
       inst = Sidekiq::Retry::Poller.new
       inst.poll
-
-      @data_store.verify
+      assert Sidekiq.data_store.pop_message('someq')[1]['class']
     end
   end
 
@@ -180,6 +177,7 @@ class TestMongo < MiniTest::Unit::TestCase
     end
 
     it 'processes messages' do
+      Sidekiq::Util.logger = Logger.new($stderr)
       IntegrationWorker.perform_async(1, 2)
       IntegrationWorker.perform_async(1, 3)
 
@@ -191,14 +189,13 @@ class TestMongo < MiniTest::Unit::TestCase
       mgr.start!
       result = q.timed_pop(1.0)
       assert_equal 'done', result
-      mgr.stop
-      mgr.terminate
+      mgr.stop(:shutdown => true, :timeout => 0)
 
       # Gross bloody hack because I can't get the actor threads
       # to shut down cleanly in the test.  Need @bascule's help here.
-      #(Thread.list - [Thread.current]).each do |t|
-      #  t.raise Interrupt
-      #end
+      (Thread.list - [Thread.current]).each do |t|
+        t.raise Interrupt
+      end
     end
   end
 

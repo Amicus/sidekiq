@@ -36,13 +36,13 @@ module Sidekiq
           if msg
             @mgr.assign!(msg, queue.gsub(/.*queue:/, ''))
           else
-            after(0) { fetch }
+            after(0) { fetch } unless @mgr.stopped?
           end
         rescue => ex
           logger.error("Error fetching message: #{ex}")
           logger.error(ex.backtrace.first)
           sleep(TIMEOUT)
-          after(0) { fetch }
+          after(0) { fetch } unless @mgr.stopped?
         end
       end
     end

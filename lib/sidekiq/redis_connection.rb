@@ -241,6 +241,10 @@ module Sidekiq
       return unique
     end
 
+    def flush
+      @pool.with {|conn| conn.flushdb }
+    end
+
     def forget_job(hash)
       @pool.with {|conn| conn.del(hash) }
     end

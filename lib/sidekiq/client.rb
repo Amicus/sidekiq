@@ -48,8 +48,7 @@ module Sidekiq
 
       pushed = false
       Sidekiq.client_middleware.invoke(worker_class, item, queue) do
-        payload = Sidekiq.dump_json(item)
-        pushed = Sidekiq.data_store.push_job(queue, payload)
+        pushed = Sidekiq.data_store.push_job(queue, item)
       end
       !! pushed
     end

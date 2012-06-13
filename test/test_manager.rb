@@ -10,6 +10,7 @@ class TestManager < MiniTest::Unit::TestCase
     before do
       Sidekiq.redis = REDIS
       Sidekiq.redis {|c| c.flushdb }
+      Sidekiq.data_store.flush
       $processed = 0
       $mutex = Mutex.new
     end
@@ -27,6 +28,7 @@ class TestManager < MiniTest::Unit::TestCase
     end
 
     it 'processes messages' do
+      Sidekiq::Util.logger = Logger.new($stderr)
       IntegrationWorker.perform_async(1, 2)
       IntegrationWorker.perform_async(1, 3)
 
