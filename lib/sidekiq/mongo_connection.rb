@@ -179,7 +179,7 @@ module Sidekiq
       @database['queues'].remove({'name' => name})
     end
 
-    # TODO: Atomicity
+    # TODO: DRY
     def enqueue_scheduled_retries(time)
       results = @database['retries'].find({'time' => time})
       while results.has_next? do
@@ -189,7 +189,7 @@ module Sidekiq
         queue = msg['queue']
         enqueue(queue, msg)
       end
-      delete_scheduled_retries(time)
+      @database['retries'].remove({'time' => time})
     end
 
     def pop_message(*queues)
@@ -219,14 +219,15 @@ module Sidekiq
         queue = msg['queue']
         enqueue(queue, job)
       end
+      delete_scheduled_retries(now)
     end
 
     def delete_scheduled_retries(time)
-      @database['retries'].remove({'time' => time})
+      @database['retries'].remove({'time' => {"$lte" => time}})
     end
 
     def retries_with_score(score)
-      results = @database['retries'].find({:time => score},
+      results = @database['retries'].find({:time => {"$lte" => score}},
                                           {:fields => {'_id' => 0, 'time' => 0, 'job' => 1}})
       jobs = []
       while results.has_next? do
