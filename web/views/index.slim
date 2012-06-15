@@ -56,7 +56,7 @@
           th Queue
           th Worker
           th Args
-        - retries.each do |retry|
+        - retries.each do |(retry)|
           - msg = retry[:message]
           tr
             td
