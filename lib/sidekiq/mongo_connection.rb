@@ -7,6 +7,8 @@ module Sidekiq
   class MongoConnection
     include Sidekiq::DataStore
 
+    attr_reader :database
+
     def self.create(options={})
       MongoConnection.new(options)
     end
