@@ -34,7 +34,7 @@ module Sidekiq
           msg = nil
           job = Sidekiq.data_store.pop_message(*queues_cmd)
           if job
-            queue = job[:queue]
+            queue = job[:name]
             msg = job[:message]
             @mgr.assign!(msg, queue.gsub(/.*queue:/, ''))
           else
