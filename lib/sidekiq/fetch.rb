@@ -33,9 +33,9 @@ module Sidekiq
           queue = nil
           msg = nil
           job = Sidekiq.data_store.pop_message(*queues_cmd)
-          queue = job[:queue]
-          msg = job[:message]
-          if msg
+          if job
+            queue = job[:queue]
+            msg = job[:message]
             @mgr.assign!(msg, queue.gsub(/.*queue:/, ''))
           else
             after(0) { fetch } unless @mgr.stopped?
