@@ -32,7 +32,9 @@ module Sidekiq
         begin
           queue = nil
           msg = nil
-          queue, msg = Sidekiq.data_store.pop_message(*queues_cmd)
+          job = Sidekiq.data_store.pop_message(*queues_cmd)
+          queue = job[:queue]
+          msg = job[:message]
           if msg
             @mgr.assign!(msg, queue.gsub(/.*queue:/, ''))
           else

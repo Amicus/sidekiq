@@ -41,11 +41,14 @@ module Sidekiq
 
     def enqueue(queue, payload)
       logger.debug "enqueue method with #{payload.class}"
-      @database['queues'].insert({'name' => queue,
+      unique_id = BSON::ObjectId.new
+      @database['queues'].insert({'_id' => unique_id,
+                                  'name' => queue,
                                   'message' => Sidekiq.dump_json(payload),
                                   'inserted' => Time.now.utc,
                                   'owned' => false
                                  })
+      unique_id
     end
 
     #TODO: clean up the api to get rid of this method
@@ -173,7 +176,7 @@ module Sidekiq
     end
 
     # TODO: DRY
-    def enqueue_scheduled_retries(time)
+    def enqueue_scheduled_retries(unique_identifier)
       results = @database['retries'].find({'time' => time})
       while results.has_next? do
         result = results.next
@@ -190,10 +193,14 @@ module Sidekiq
       queue = @database['queues'].find_and_modify({:query => {'name' => {"$in" => queue_strings},
                                                               'owned' => false},
                                                    :update => {"$set" => {'owned' => true}},
-                                                   :fields => {'name' => 1, 'message' => 1},
+                                                   :fields => {'_id' => 1, 'name' => 1, 'message' => 1},
                                                    :new => false})
       if queue
-        [queue['name'], Sidekiq.load_json(queue['message'])]
+        {
+            :name => queue['name'],
+            :message => Sidekiq.load_json(queue['message']),
+            :unique_identifier => queue['_id']
+        }
       else
         sleep 1
         nil
@@ -226,9 +233,8 @@ module Sidekiq
       @database['retries'].remove({'time' => {"$lte" => time}})
     end
 
-    def retries_with_score(score)
-      score = Time.at(score).utc unless score.is_a?(Time)
-      results = @database['retries'].find({:time => score},
+    def retries_with_score(unique_identifier)
+      results = @database['retries'].find({:_id => unique_identifier},
                                           {:fields => {'job' => 1}})
       jobs = []
       while results.has_next? do
@@ -247,7 +253,7 @@ module Sidekiq
       retries = []
       while retry_docs.has_next? and retries.size <= 25 do
         doc = retry_docs.next
-        retries << [Sidekiq.load_json(doc['job']), Float(doc['time'])]
+        retries << {:message => Sidekiq.load_json(doc['job']), :unique_identifier => Float(doc['time']) }
       end
       return retries
     end

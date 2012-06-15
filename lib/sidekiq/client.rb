@@ -50,7 +50,7 @@ module Sidekiq
       Sidekiq.client_middleware.invoke(worker_class, item, queue) do
         pushed = Sidekiq.data_store.push_job(queue, item)
       end
-      !! pushed
+      pushed
     end
 
     # Redis compatibility helper.  Example usage:

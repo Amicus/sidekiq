@@ -3,6 +3,8 @@ require 'redis'
 require 'redis/namespace'
 require 'sidekiq/util'
 
+#TODO (topper): as of 6/15/2012 this is no longer compatible
+
 module Sidekiq
   class RedisConnection
     include Sidekiq::DataStore

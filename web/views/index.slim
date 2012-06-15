@@ -56,10 +56,11 @@
           th Queue
           th Worker
           th Args
-        - retries.each do |(msg, score)|
+        - retries.each do |retry|
+          - msg = retry[:message]
           tr
             td
-              a href="retries/#{score}"== relative_time(Time.at(score))
+              a href="retries/#{retry[:unique_identifier}"== relative_time(msg['time')
             td= msg['retry_count']
             td
               a href="queues/#{msg['queue']}" #{msg['queue']}

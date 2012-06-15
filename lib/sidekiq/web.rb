@@ -123,13 +123,12 @@ module Sidekiq
       slim :retry
     end
 
-    post "/retries/:score" do
+    post "/retries/:unique_identifier" do
       halt 404 unless params[:score]
-      score = params[:score].to_f
       if params['retry']
-        Sidekiq.data_store.enqueue_scheduled_retries(score)
+        Sidekiq.data_store.enqueue_scheduled_retries(unique_identifier)
       elsif params['delete']
-        Sidekiq.data_store.delete_scheduled_retries(score)
+        Sidekiq.data_store.delete_scheduled_retries(unique_identifier)
       end
       redirect root_path
     end
