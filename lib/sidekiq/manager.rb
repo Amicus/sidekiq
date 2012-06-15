@@ -35,6 +35,7 @@ module Sidekiq
 
     def stop(options={})
       watchdog('Manager#stop died') do
+        logger.debug { "stop called" }
         shutdown = options[:shutdown]
         timeout = options[:timeout]
 
