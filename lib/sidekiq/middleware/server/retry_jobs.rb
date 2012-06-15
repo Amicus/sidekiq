@@ -51,7 +51,7 @@ module Sidekiq
           if count <= MAX_COUNT
             delay = DELAY.call(count)
             logger.debug { "Failure! Retry #{count} in #{delay} seconds" }
-            retry_at = Time.now.to_f + delay
+            retry_at = Time.now.utc.to_f + delay
             Sidekiq.data_store.retry(msg, Time.at(retry_at).utc)
           else
             # Goodbye dear message, you (re)tried your best I'm sure.
