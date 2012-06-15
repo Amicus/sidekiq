@@ -227,6 +227,7 @@ module Sidekiq
     end
 
     def retries_with_score(score)
+      score = Time.at(score).utc unless score.is_a?(Time)
       results = @database['retries'].find({:time => {"$lte" => score}},
                                           {:fields => {'job' => 1}})
       jobs = []
