@@ -74,6 +74,10 @@ module Sidekiq
         Sidekiq.data_store.location
       end
 
+      def version
+        Sidekiq::VERSION
+      end
+
       def root_path
         "#{env['SCRIPT_NAME']}/"
       end
