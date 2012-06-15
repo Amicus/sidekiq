@@ -80,13 +80,7 @@ module Sidekiq
     end
 
     def registered_queues
-      queue_docs = @database['queues'].find({}, {:fields => {'_id' => 0,
-                                                             'name' => 1,
-                                                             'message' => 0,
-                                                             'inserted' => 0,
-                                                             'owned' => 0}
-                                                }
-                                           )
+      queue_docs = @database['queues'].find({}, { :fields => {'name' => 1} })
       queues = Set.new
       while queue_docs.has_next? do
         doc = queue_docs.next
@@ -118,7 +112,7 @@ module Sidekiq
     end
 
     def registered_workers
-      worker_docs = @database['workers'].find({}, {:fields => {'_id' => 0, 'name' => 1, 'job' => 0}})
+      worker_docs = @database['workers'].find({}, {:fields => {'name' => 1}})
       workers = []
       while worker_docs.has_next? do
         worker = worker_docs.next
@@ -128,7 +122,7 @@ module Sidekiq
     end
 
     def worker_jobs
-      worker_docs = @database['workers'].find({}, {:fields => {'_id' => 0, 'name' => 1, 'job' => 1}})
+      worker_docs = @database['workers'].find({}, {:fields => {'name' => 1, 'job' => 1}})
       workers = []
       while worker_docs.has_next? do
         doc = worker_docs.next
@@ -234,7 +228,7 @@ module Sidekiq
 
     def retries_with_score(score)
       results = @database['retries'].find({:time => {"$lte" => score}},
-                                          {:fields => {'_id' => 0, 'time' => 0, 'job' => 1}})
+                                          {:fields => {'job' => 1}})
       jobs = []
       while results.has_next? do
         next_result = results.next
