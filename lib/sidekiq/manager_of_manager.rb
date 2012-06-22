@@ -2,7 +2,7 @@ require 'sidekiq/manager'
 require 'java' #this is only for JRUBY!
 require 'fileutils'
 
-require 'sidekiq/context'
+require 'sidekiq/jruby_context'
 
 trap 'INT' do
   # Handle Ctrl-C in JRuby like MRI
@@ -84,7 +84,7 @@ module Sidekiq
    end
 
    def new_context
-     @context = Context.new
+     @context = JrubyContext.new
    end
 
    #TODO: DRY this

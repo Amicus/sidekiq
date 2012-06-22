@@ -1,5 +1,5 @@
 module Sidekiq
-  class Context
+  class JrubyContext
     include Util
     include Celluloid
 
