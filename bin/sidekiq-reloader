@@ -1,0 +1,20 @@
+#!/usr/bin/env ruby
+
+puts 'loading'
+$stderr.puts "loading"
+#require_relative '../lib/sidekiq/cli'
+require_relative '../lib/sidekiq/manager_of_manager'
+puts 'required'
+
+begin
+  puts 'parsing cli'
+  puts 'new manager of managers'
+  mom = Sidekiq::ManagerOfManager.new
+  puts 'starting mom'
+  mom.start
+rescue => e
+  raise e #if $DEBUG
+  STDERR.puts e.message
+  STDERR.puts e.backtrace.join("\n")
+  exit 1
+end

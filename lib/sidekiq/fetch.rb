@@ -30,6 +30,7 @@ module Sidekiq
     def fetch
       watchdog('Fetcher#fetch died') do
         begin
+          logger.info {"fetching message"}
           queue = nil
           msg = nil
           queue, msg = Sidekiq.data_store.pop_message(*queues_cmd)

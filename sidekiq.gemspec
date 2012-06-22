@@ -7,7 +7,7 @@ Gem::Specification.new do |gem|
   gem.description   = gem.summary = "Simple, efficient message processing for Ruby"
   gem.homepage      = "http://mperham.github.com/sidekiq"
 
-  gem.executables   = ['sidekiq', 'sidekiqctl']
+  gem.executables   = ['sidekiq', 'sidekiqctl', 'sidekiq-reloader']
   gem.files         = `git ls-files`.split("\n")
   gem.test_files    = `git ls-files -- test/*`.split("\n")
   gem.name          = "sidekiq"

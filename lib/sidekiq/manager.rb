@@ -29,7 +29,9 @@ module Sidekiq
       @done = false
       @busy = []
       @fetcher = Fetcher.new(current_actor, options[:queues])
+      logger.info { "putting in #{@count} processors" }
       @ready = @count.times.map { Processor.new_link(current_actor) }
+      logger.info { "procline coming up" }
       procline
     end
 
@@ -55,6 +57,7 @@ module Sidekiq
     end
 
     def start
+      logger.info { "starting up the manager for #{@read.length} workers" }
       @ready.each { dispatch }
     end
 
@@ -100,6 +103,7 @@ module Sidekiq
           # Push the message back to the data store.
           Sidekiq.data_store.enqueue(queue, msg)
         else
+          logger.info {"assigning message"}
           processor = @ready.pop
           @in_progress[processor.object_id] = [msg, queue]
           @busy << processor
@@ -135,6 +139,7 @@ module Sidekiq
       return if stopped?
       # This is a safety check to ensure we haven't leaked
       # processors somehow.
+      logger.info {"dispatch"}
       raise "BUG: No processors, cannot continue!" if @ready.empty? && @busy.empty?
       raise "No ready processor!?" if @ready.empty?
 
@@ -148,6 +153,7 @@ module Sidekiq
     def procline
       $0 = "sidekiq #{Sidekiq::VERSION} [#{@busy.size} of #{@count} busy]#{stopped? ? ' stopping' : ''}"
       after(5) { procline }
+      logger.info {"procline finished"}
     end
   end
 end

@@ -194,11 +194,11 @@ class TestMongo < MiniTest::Unit::TestCase
       mgr.stop
       mgr.terminate
 
-      # Gross bloody hack because I can't get the actor threads
-      # to shut down cleanly in the test.  Need @bascule's help here.
-      #(Thread.list - [Thread.current]).each do |t|
-      #  t.raise Interrupt
-      #end
+      #Gross bloody hack because I can't get the actor threads
+      #to shut down cleanly in the test.  Need @bascule's help here.
+      (Thread.list - [Thread.current]).each do |t|
+        t.raise Interrupt
+      end
     end
   end
 

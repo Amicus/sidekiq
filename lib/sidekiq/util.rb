@@ -19,7 +19,7 @@ module Sidekiq
     def self.logger
       @logger ||= begin
         log = Logger.new(STDOUT)
-        log.level = Logger::INFO
+        log.level = Logger::DEBUG
         log.formatter = Pretty.new
         log
       end
