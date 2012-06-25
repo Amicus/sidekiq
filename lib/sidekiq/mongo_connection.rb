@@ -278,20 +278,21 @@ module Sidekiq
       end
     end
 
+    #TODO: this isn't mongo
     def job_taken?(hash, expiration)
-      unique = false
-      pool.with do |conn|
-        conn.watch(hash)
-
-        if conn.get(hash)
-          conn.unwatch
-        else
-          unique = conn.multi do
-            conn.setex(hash, expiration, 1)
-          end
-        end
-      end
-      return unique
+      #unique = false
+      #pool.with do |conn|
+      #  conn.watch(hash)
+      #
+      #  if conn.get(hash)
+      #    conn.unwatch
+      #  else
+      #    unique = conn.multi do
+      #      conn.setex(hash, expiration, 1)
+      #    end
+      #  end
+      #end
+      #return unique
     end
 
     def forget_job(hash)

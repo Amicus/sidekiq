@@ -15,6 +15,12 @@ trap 'USR1' do
   mgr.stop! if mgr
 end
 
+#trap 'WINCH' do
+#  Sidekiq::Util.logger.info "Received WINCH, no longer accepting new work"
+#  mgr = Sidekiq::CLI.instance.manager
+#  mgr.stop! if mgr
+#end
+
 require 'yaml'
 require 'singleton'
 require 'optparse'

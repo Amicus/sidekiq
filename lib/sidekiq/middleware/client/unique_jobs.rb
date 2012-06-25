@@ -7,6 +7,7 @@ module Sidekiq
       class UniqueJobs
         HASH_KEY_EXPIRATION = 30 * 60
 
+        #TODO: this isn't implemented in Mongo yet
         def call(worker_class, item, queue)
           enabled = worker_class.get_sidekiq_options['unique']
           if enabled
