@@ -209,7 +209,7 @@ module Sidekiq
 
     #TODO: Atomicity
     def poll
-      now = Time.now.to_f.to_s
+      now = Time.now.to_f
       retries = @database['retries'].find({'time' => {"$lte" => now}})
       while retries.has_next? do
         to_retry = retries.next
@@ -228,11 +228,11 @@ module Sidekiq
 
     def retries_with_score(score)
       results = @database['retries'].find({:time => {"$lte" => score}},
-                                          {:fields => {'_id' => 0, 'time' => 0, 'job' => 1}})
+                                          {:fields => {'job' => 1}})
       jobs = []
       while results.has_next? do
         next_result = results.next
-        jobs << Sidekiq.load_json(next_result[:job])
+        jobs << Sidekiq.load_json(next_result['job'])
       end
       return jobs
     end
