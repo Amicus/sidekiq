@@ -4,11 +4,7 @@ require 'fileutils'
 
 require 'sidekiq/jruby_context'
 
-trap 'INT' do
-  # Handle Ctrl-C in JRuby like MRI
-  # http://jira.codehaus.org/browse/JRUBY-4637
-  Thread.main.raise Interrupt
-end
+
 
 module Sidekiq
  class ManagerOfManager
@@ -21,6 +17,13 @@ module Sidekiq
      @monitor_path = monitor_path
      @transitioning = false
      @poll_timeout = 15
+
+     trap 'INT' do
+       # Handle Ctrl-C in JRuby like MRI
+       # http://jira.codehaus.org/browse/JRUBY-4637
+       shutdown_completely!
+     end
+
    end
 
    def start
@@ -53,11 +56,16 @@ module Sidekiq
          sleep @poll_timeout
        end
      rescue Interrupt
-       stop(context)
-       finalize(context)
-       exit(0)
+       shutdown_completely!
      end
    end
+
+   def shutdown_completely!
+     stop(context)
+     finalize(context)
+     exit(0)
+   end
+
 
    def boot_strap_ruby
      <<-EOS
