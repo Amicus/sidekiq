@@ -79,9 +79,9 @@ module Sidekiq
       poller = Sidekiq::Retry::Poller.new
       begin
         logger.info "Starting processing with Sidekiq version #{Sidekiq::VERSION}, hit Ctrl-C to stop"
+        poll_for_restart if options[:monitor]
         @manager.start!
         poller.poll!
-        poll_for_restart if options[:monitor]
         sleep
       rescue Interrupt
         logger.info 'Shutting down'
@@ -100,6 +100,7 @@ module Sidekiq
       Thread.new do
         polling = true
         file = options[:monitor]
+        logger.info { "monitoring #{file} for changes" }
         if File.exist?(file)
           mtime = File.mtime(file)
         else
