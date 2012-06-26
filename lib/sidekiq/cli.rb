@@ -107,7 +107,7 @@ module Sidekiq
           mtime = Time.now
         end
         while polling
-          if File.exist?(file) and File.mtime(file) >= mtime
+          if File.exist?(file) and File.mtime(file) > mtime
             polling = false
             Thread.main.raise Interrupt
           else
