@@ -45,24 +45,6 @@ require 'sidekiq/retry'
 #end
 #listener.start(false) #non blocking
 
-Thread.new do
-  polling = true
-  file = "tmp/restart.txt"
-  if File.exist?(file)
-    mtime = File.mtime(file)
-  else
-    mtime = Time.now
-  end
-  while polling
-    if File.exist?(file) and File.mtime(file) > mtime
-      polling = false
-      Thread.main.raise Interrupt
-    else
-      sleep 1
-    end
-  end
-end
-
 module Sidekiq
   class CLI
     include Util
@@ -99,6 +81,7 @@ module Sidekiq
         logger.info "Starting processing with Sidekiq version #{Sidekiq::VERSION}, hit Ctrl-C to stop"
         @manager.start!
         poller.poll!
+        poll_for_restart if options[:monitor]
         sleep
       rescue Interrupt
         logger.info 'Shutting down'
@@ -112,6 +95,26 @@ module Sidekiq
     end
 
     private
+
+    def poll_for_restart
+      Thread.new do
+        polling = true
+        file = options[:monitor]
+        if File.exist?(file)
+          mtime = File.mtime(file)
+        else
+          mtime = Time.now
+        end
+        while polling
+          if File.exist?(file) and File.mtime(file) >= mtime
+            polling = false
+            Thread.main.raise Interrupt
+          else
+            sleep 1
+          end
+        end
+      end
+    end
 
     def die(code)
       exit(code)
@@ -166,6 +169,10 @@ module Sidekiq
 
         o.on "-v", "--verbose", "Print more verbose output" do
           Sidekiq::Util.logger.level = Logger::DEBUG
+        end
+
+        o.on "-m", "--marker", "the file to monitor for restart" do |arg|
+          opts[:marker] = arg
         end
 
         o.on '-e', '--environment ENV', "Application environment" do |arg|

@@ -74,6 +74,10 @@ module Sidekiq
     end
   end
 
+  def self.monitor=(monitor)
+    options[:monitor] = monitor
+  end
+
   def self.data_store
     @data_store ||= Sidekiq::DataStore.create
   end
