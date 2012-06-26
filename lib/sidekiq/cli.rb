@@ -172,8 +172,8 @@ module Sidekiq
           Sidekiq::Util.logger.level = Logger::DEBUG
         end
 
-        o.on "-m", "--marker", "the file to monitor for restart" do |arg|
-          opts[:marker] = arg
+        o.on "-m", "--monitor", "the file to monitor for restart" do |arg|
+          opts[:monitor] = arg
         end
 
         o.on '-e', '--environment ENV', "Application environment" do |arg|
