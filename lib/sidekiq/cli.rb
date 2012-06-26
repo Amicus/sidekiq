@@ -30,20 +30,38 @@ require 'sidekiq'
 require 'sidekiq/util'
 require 'sidekiq/manager'
 require 'sidekiq/retry'
+#
+#require 'listen'
+#
+#listener = Listen.to("tmp", :filter => /restart\.txt$/)
+#listener.change do |modified, added, removed|
+#  puts "changed"
+#  Thread.main.raise Interrupt
+#  #
+#  #instance = Sidekiq::CLI.instance
+#  #Sidekiq::Util.logger.info "restart.txt changed, no longer accepting new work, timing out for hard reset in #{instance.options[:timeout]}"
+#
+#
+#end
+#listener.start(false) #non blocking
 
-require 'listen'
-
-listener = Listen.to("tmp", :filter => /restart\.txt$/)
-listener.change do |modified, added, removed|
-  puts "changed"
-  Thread.main.raise Interrupt
-  #
-  #instance = Sidekiq::CLI.instance
-  #Sidekiq::Util.logger.info "restart.txt changed, no longer accepting new work, timing out for hard reset in #{instance.options[:timeout]}"
-
-
+Thread.new do
+  polling = true
+  file = "tmp/restart.txt"
+  if File.exist?(file)
+    mtime = File.mtime(file)
+  else
+    mtime = Time.now
+  end
+  while polling
+    if File.exist?(file) and File.mtime(file) > mtime
+      polling = false
+      Thread.main.raise Interrupt
+    else
+      sleep 1
+    end
+  end
 end
-listener.start(false) #non blocking
 
 module Sidekiq
   class CLI

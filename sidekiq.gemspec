@@ -18,7 +18,7 @@ Gem::Specification.new do |gem|
   gem.add_dependency                  'connection_pool', '~> 0.9.0'
   gem.add_dependency                  'celluloid', '~> 0.10.0'
   gem.add_dependency                  'multi_json', '~> 1'
-  gem.add_dependency                  'listen', '~> 0.4.0'
+  #gem.add_dependency                  'listen', '~> 0.4.0'
 
   gem.add_development_dependency      'minitest'
   gem.add_development_dependency      'sinatra'
