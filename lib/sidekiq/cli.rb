@@ -172,7 +172,7 @@ module Sidekiq
           Sidekiq::Util.logger.level = Logger::DEBUG
         end
 
-        o.on "-m", "--monitor", "the file to monitor for restart" do |arg|
+        o.on "-m", "--monitor PATH", "the file to monitor for restart" do |arg|
           opts[:monitor] = arg
         end
 
