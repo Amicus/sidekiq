@@ -12,6 +12,8 @@ module Sidekiq
       MongoConnection.new(options)
     end
 
+    attr_reader :database
+
     def initialize(options={})
       options = options.dup
       host = options.delete(:host)
