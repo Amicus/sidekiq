@@ -6,6 +6,7 @@ require 'yaml'
 module Sidekiq
   class MongoConnection
     include Sidekiq::DataStore
+    include Util
 
     def self.create(options={})
       MongoConnection.new(options)
@@ -38,11 +39,14 @@ module Sidekiq
     end
 
     def enqueue(queue, payload)
-      @database['queues'].insert({'name' => queue,
+      logger.debug { "received #{queue} with #{payload}" }
+      res = @database['queues'].insert({'name' => queue,
                                   'message' => payload,
                                   'inserted' => Time.now.strftime("%Y/%m/%d %H:%M:%S %Z"),
                                   'owned' => 'false'
                                  })
+      logger.debug { "res was: #{res}" }
+      res
     end
 
     #TODO: clean up the api to get rid of this method
@@ -96,6 +100,7 @@ module Sidekiq
       return queues.to_a
     end
 
+    #TODO: this looks at all documents in all queues
     def sorted_queues
       queue_docs = @database['queues'].find({})
       queues = {}
@@ -202,7 +207,7 @@ module Sidekiq
       if queue
         [queue['name'], queue['message']]
       else
-        sleep 1
+        #sleep 1
       end
 
     end

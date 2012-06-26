@@ -34,15 +34,16 @@ module Sidekiq
           msg = nil
           queue, msg = Sidekiq.data_store.pop_message(*queues_cmd)
           if msg
+            logger.debug { "popped message #{msg}" }
             @mgr.assign!(msg, queue.gsub(/.*queue:/, ''))
           else
-            after(0) { fetch }
+            after(TIMEOUT) { fetch }
           end
         rescue => ex
           logger.error("Error fetching message: #{ex}")
           logger.error(ex.backtrace.first)
           sleep(TIMEOUT)
-          after(0) { fetch }
+          after(TIMEOUT) { fetch }
         end
       end
     end

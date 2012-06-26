@@ -122,6 +122,7 @@ module Sidekiq
             # that would go to the actor (since it's busy).  Instead
             # we'll use the object_id to track the worker's data here.
             msg, queue = @in_progress[processor.object_id]
+            logger.info("Pushed #{msg.inspect} back to #{queue.inspect}")
             Sidekiq.data_store.enqueue(queue, msg)
           end
           logger.info("Pushed #{@busy.size} messages back to the data store")
