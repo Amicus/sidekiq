@@ -155,7 +155,7 @@ module Sidekiq
 
     #TODO: find location method for mongo client
     def location
-      "localhost"
+
     end
 
     def get_first(n, name)

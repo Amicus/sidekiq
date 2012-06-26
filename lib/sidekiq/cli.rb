@@ -78,7 +78,7 @@ module Sidekiq
       @manager = Sidekiq::Manager.new(options)
       poller = Sidekiq::Retry::Poller.new
       begin
-        logger.info 'Starting processing, hit Ctrl-C to stop'
+        logger.info "Starting processing with Sidekiq version #{Sidekiq::VERSION}, hit Ctrl-C to stop"
         @manager.start!
         poller.poll!
         sleep
