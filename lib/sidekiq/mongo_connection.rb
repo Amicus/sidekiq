@@ -27,7 +27,7 @@ module Sidekiq
       namespace = "#{namespace_prefix}_#{namespace_suffix}"
 
       if replica_set
-        options[:read] = :secondary
+        #options[:read] = :secondary
         @database = Mongo::ReplSetConnection.new(replica_set, options).db(namespace)
       elsif host
         @database = Mongo::Connection.new(host, port, options).db(namespace)
